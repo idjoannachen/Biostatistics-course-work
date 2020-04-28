@@ -1,0 +1,187 @@
+---
+title: "S&DS 542 HW 9"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+setwd("~/Desktop")
+library(MASS)
+library(fitdistrplus)
+X = read.csv('gamma-arrivals.txt', header=FALSE)[,1]
+```
+
+```{r}
+# Newton-Raphson code from Homework 8
+gammaMLE <- function(X) {
+  a.prev = -Inf
+  a = mean(X)^2/var(X) # fill in code to initialize alpha^{(0)}
+  
+  while (abs(a-a.prev) > 1e-6) {
+    if (a <= 0) { a = 1e-6 }
+        a.prev = a
+    # fill in code to compute alpha^{(t+1)} from alpha^{(t)} = a.prev
+    numerator_new = log(a.prev) - digamma(a.prev) - log(mean(X)) + mean(log(X))
+    denominator_new = 1/a.prev - trigamma(a.prev)
+    a = a.prev - numerator_new/denominator_new # set to alpha^{(t+1)}
+  }
+  a.hat = a
+  b.hat = a.hat/mean(X)# fill in code to compute beta-hat from alpha-hat = a.hat
+  return(c(a.hat,b.hat))
+}
+```
+
+##### Question 1
+(a) Fit a Gamma($\alpha,\beta$) distribution to this data using both the method-of-moments and the MLE, and report your estimated parameters ($\hat\alpha,\hat\beta$) for both methods. To fit the MLE, you may use either your Newton-Raphson code from Homework 8 or any publicly available software implementation.
+```{r}
+#-------------------Method of Moments---------------------#
+alpha_mom <- mean(X)^2/var(X) 
+beta_mom <- alpha_mom/mean(X) 
+alpha_mom # alpha_hat_mom = 1.012095
+beta_mom # beta_hat_mom0.01266144
+
+#-------------------------MLE----------------------------#
+gamma_mle_result = gammaMLE(X) 
+alpha_mle = gamma_mle_result[1] # alpha_hat_mle = 1.02633174
+beta_mle = gamma_mle_result[2] # beta_hat_mle = 0.01283954
+alpha_mle
+beta_mle
+```
+
+(b) Plot the PDFs of your fitted gamma distributions on top of the histogram of the data. Do the model fits look reasonable? 
+```{r}
+x.grid = seq(0, max(X), by=0.01)
+f.grid = dgamma(x.grid, alpha_mom, rate=beta_mom)
+hist(X, breaks=30, freq=FALSE)
+lines(x.grid, f.grid)
+```
+
+The model with MOM parameter estimates fits the distribution well. 
+Let's density plot determined by two estimates on the same plot.
+```{r}
+x.grid = seq(0, max(X), by=0.01)
+f.grid2 = dgamma(x.grid, gamma_mle_result[1], rate=gamma_mle_result[2])
+hist(X, breaks=30, freq=FALSE)
+lines(x.grid, f.grid,col = 'blue')
+lines(x.grid, f.grid2, col = 'red',lty = 2)
+legend('topright', legend=c("mom", "mle"), col=c("blue", "red"), lty=1:2)
+```
+
+The model with m-o-m and mle parameter estimates both fits the distribution very well.
+
+3. Use a *parametric* bootstrap to estimate the standard error of $\hat\alpha$ for both your method-of- moments estimate and your MLE. How do the estimated standard errors of the two methods compare on this data set?
+```{r,warning=FALSE}
+# Number of simulations
+sim = 1000 
+
+bs_mom = matrix(0,2,sim) # create a 2*sim zeros matrix
+bs_mle = matrix(0,2,sim)
+
+for (i in 1:sim){
+  # Method of Moments
+  mom_x_star = rgamma(3935, alpha_mom, beta_mom)
+  mom = fitdist(data = mom_x_star, distr = 'gamma', method = 'mme')
+  bs_mom[1,i] = mom$estimate[1]
+  bs_mom[2,i] = mom$estimate[2]
+  
+  # MLE
+  mle_x_star = rgamma(3935, alpha_mle, beta_mle)
+  mle = fitdist(data = mle_x_star, distr = 'gamma', method = 'mle')
+  bs_mle[1,i] = mle$estimate[1]
+  bs_mle[2,i] = mle$estimate[2]
+}
+
+mom_alpha_SE = sd(bs_mom[1,])
+mom_beta_SE = sd(bs_mom[2,])
+mom_alpha_SE
+mom_beta_SE
+
+mle_alpha_SE = sd(bs_mle[1,])
+mle_beta_SE = sd(bs_mle[2,])
+mle_alpha_SE
+mle_beta_SE
+
+#alpha_error_mom = var(bs_mom[1,])/(sim-1) #1.031033e-06
+#beta_error_mom = var(bs_mom[2,])/(sim-1) #1.967415e-10
+
+#shape_error_mle <- var(bs_mle[1,])/(sim-1) #4.40442e-07
+#rate_error_mle <- var(bs_mle[2,])/(sim-1) #1.136885e-10
+
+```
+
+The standard error of MOM is larger than MLE on this data set using bootstrap 1000 iterations.
+
+\newpage 
+
+##### Question 2
+(c) Suppose X1,..., Xn ∼ Exponential(1). Set n = 500 and perform 10,000 simulations to compare the estimates in parts (a) and (b) (??). Compute the empirical standard deviation of $\hat\lambda$ across your 10,000 simulations. Also plot two histograms of the estimated standard errors from parts (a) and (b) across these simulations. Which standard error estimate seems more accurate? Why do you think this is the case?
+
+The empirical SE of $\hat\lambda$ is 0.04563333. The mean of the estimated SE from (a) is 0.04482479 and the mean of the estimated SE from (b) is 0.04476024. From the plots, both estimated SE are centered at 0.045, while the one from part (a) has less width which means more precise. That is because we suppose our data follows Exponential(1) so the plug-in estimate of SE based on the exponential distribution has less variability/more precise/better than the the one from part (b) which is not assume exponential distributed data. 
+```{r}
+n = 500
+sim = 10000
+lambda_hat = numeric(sim)
+se1 = numeric(sim)
+se2 = numeric(sim)
+for (i in 1:sim) {
+  X = rexp(n,1)
+  lambda_hat[i] = 1/mean(X)
+  se1[i] = 1/(sqrt(n)*mean(X))
+  se2[i] = sd(X)/(mean(X)^2*sqrt(n))
+}
+# lambda_hat
+mean(lambda_hat)
+mean(se1)
+mean(se2)
+sd(lambda_hat)
+hist(se1)
+hist(se2)
+```
+
+(d) Suppose now that X1, . . . , Xn ∼ Gamma(2, 1), so that the Exponential model is misspecified. Repeat part (c) in this setting. Which standard error estimate seems more accurate now? Why do you think this is the case?
+
+The empirical SE of $\hat\lambda$ is  0.01585399 The mean of the estimated SE from (a) is 0.02239985 and the mean of the estimated SE from (b) is 0.01582212 From the plots, the one from part (a) is centered around the empirical SE, therefore, it is more accurate. That is because now the Exponential model is misspecified so the plug-in estimate of SE based on the exponential distribution is not accurate any more. 
+```{r}
+n = 500
+sim = 10000
+lambda_hat = numeric(sim)
+se1 = numeric(sim)
+se2 = numeric(sim)
+for (i in 1:sim) {
+  X = rgamma(n,2,rate=1)
+  lambda_hat[i] = 1/mean(X)
+  se1[i] = 1/(sqrt(n)*mean(X))
+  se2[i] = sd(X)/(mean(X)^2*sqrt(n))
+}
+# lambda_hat
+mean(lambda_hat)
+mean(se1)
+mean(se2)
+sd(lambda_hat)
+hist(se1)
+hist(se2)
+```
+
+(e) Simulate X1,..., Xn ∼ Gamma(2, 1) once. For this simulated data, estimate the standard error of $\hat\lambda$ using the nonparametric bootstrap. Is this nonparametric bootstrap estimate closer to the standard error estimate of part (a) or part (b)?
+The nonparametric bootstrap SE estimate is 0.01523578 which is more close to part (b).
+```{r}
+n = 500
+X = rgamma(n,2,rate=1)
+sim = 1000
+
+lambda_hat_star = numeric(sim)
+
+for (i in 1:sim) {
+  X_star = sample(X, size=n, replace=TRUE)
+  lambda_hat_star[i] = 1/mean(X_star)
+}
+print(sd(lambda_hat_star))
+
+```
+

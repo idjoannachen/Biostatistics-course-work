@@ -1,0 +1,132 @@
+---
+title: "Theory of Statistics HW 4"
+date: "2/7/2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#### Question 3
+#### (a) For n = 100, verify numerically that these tests have significance level close to $\alpha$, in the following way: Perform 10,000 simulations. In each simulation, draw a sample of 100 observations from N(0,1), compute the above four test statistics X ̄, T, W, and S on this sample, and record whether each test accepts or rejects H0. Report the fraction of simulations for which each test rejected H0, and confirm that these fractions are close to $\alpha$ = 0.05.
+```{r}
+set.seed(123)
+n = 100
+
+output.lik = numeric(10000)
+output.T = numeric(10000)
+output.wilcoxon = numeric(10000)
+output.sign = numeric(10000)
+
+for (i in 1:10000){
+  X = rnorm(n, mean=0, sd=1)
+# LRT
+   if (mean(X)> qnorm(0.95)/sqrt(n)) {
+    output.lik[i] = 1
+  } else {
+    output.lik[i] = 0
+  }
+# T test  
+  T.stat = t.test(X)$statistic
+  if (T.stat > qt(0.95,df=99)) {
+    output.T[i] = 1
+  } else {
+    output.T[i] = 0
+  }
+# Wilcoxon signed rank test
+   Wilcoxon.stat = wilcox.test(X)$statistic
+  if (Wilcoxon.stat > n*(n+1)/4 + qnorm(0.95)*sqrt(n*(n+1)*(2*n+1)/24)) {
+    output.wilcoxon[i] = 1
+  } else {
+    output.wilcoxon[i] = 0
+  }
+# Sign test
+    Sign.stat = length(which(X>0))
+    if (Sign.stat > n/2 + qnorm(0.95)*sqrt(n/4)) {
+    output.sign[i] = 1
+  } else {
+    output.sign[i] = 0
+  }
+}
+
+print(paste("X = ",sum(output.lik)/10000))
+print(paste("T = ",sum(output.T)/10000))
+print(paste("W = ",sum(output.wilcoxon)/10000))
+print(paste("S = ",sum(output.sign)/10000))
+
+```
+
+Yes, these fractioons are close to and less than 0.05.  
+
+#### (b) For n = 100, numerically compute the powers of these tests against the alternative H1, for the values $\mu$ = 0.1, 0.2, 0.3, and 0.4. Do this by performing 10,000 simulations as in part (a), except now drawing each sample of 100 observations from N($\mu$,1) instead of N(0,1). Report your computed powers either in a table or visually using a graph.
+
+```{r}
+result = matrix(, nrow = 4, ncol = 4)
+for(j in c(0.1,0.2,0.3,0.4)){
+output.lik = numeric(10000)
+output.T = numeric(10000)
+output.wilcoxon = numeric(10000)
+output.sign = numeric(10000)
+
+for (i in 1:10000){
+  X = rnorm(n, mean=j, sd=1)
+# LRT
+   if (mean(X)> qnorm(0.95)/sqrt(n)) {
+    output.lik[i] = 1
+  } else {
+    output.lik[i] = 0
+  }
+# T test  
+  T.stat = t.test(X)$statistic
+  if (T.stat > qt(0.95,df=99)) {
+    output.T[i] = 1
+  } else {
+    output.T[i] = 0
+  }
+# Wilcoxon signed rank test
+   Wilcoxon.stat = wilcox.test(X)$statistic
+  if (Wilcoxon.stat > n*(n+1)/4 + qnorm(0.95)*sqrt(n*(n+1)*(2*n+1)/24)) {
+    output.wilcoxon[i] = 1
+  } else {
+    output.wilcoxon[i] = 0
+  }
+# Sign test
+    Sign.stat = length(which(X>0))
+    if (Sign.stat > n/2 + qnorm(0.95)*sqrt(n/4)) {
+    output.sign[i] = 1
+  } else {
+    output.sign[i] = 0
+  }
+}
+
+result[j*10,1]=sum(output.lik)/10000
+result[j*10,2]=sum(output.T)/10000
+result[j*10,3]=sum(output.wilcoxon)/10000
+result[j*10,4]=sum(output.sign)/10000
+
+}
+
+rownames(result) = c("mu = 0.1","mu =0.2","mu =0.3","mu =0.4")
+colnames(result) = c("LRT","T","W","S")
+knitr::kable(result)
+```
+
+#### (c) How do the powers of these four tests compare, in this setting of normally distributed data? 
+LRT has the largest power among these four tests, which fits the theorem we proved in Lecture 6. It follows with the power of T-test, Wilcoxon signed rank test and sign test. We can see that the sign test has the least power.  
+
+#### Your friend says, “We should always use the testing procedure that makes the fewest distributional assumptions, because we never know in practice, for example, whether the variance is truly 1 or whether our data are truly normal.” Comment on this statement.  
+
+Let's compare assumptions of these four tests.  
+- LRT: Assume $H_0, H_1$ are simple.  
+- t-test: Assume $X_1, ..., X_n\stackrel{I I D}{\sim} \mathcal{N}\left(\mu, \sigma^{2}\right)$ for unknown parameters $\mu$ and $\sigma^2$.  
+- Wilcoxon signed-rank statistic: Assume $X_1, ..., X_n\stackrel{I I D}{\sim} f$ for an unknown PDF f.  
+- Sign test: Assume $X_1, ..., X_n$ are IID and distributed according to a PDF f.  
+We can see that Wilcoxon and sign test makes less assumptions but the power is not better than the t-test.  
+
+#### Rice writes in your textbook, “It has been shown that even when the assumption of normality holds, the signed rank test is nearly as powerful as the t-test. The signed rank test is thus generally preferable, especially for small sample sizes.” Do your simulated results support this conclusion?  
+Based on our results, I agree that the signed rank test is nearly as powerful as the t-test. Actually, the power of LRT, T, W have very tiny differences. All of the three are preferable in our case. 
+
+
