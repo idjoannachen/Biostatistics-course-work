@@ -1,0 +1,139 @@
+---
+title: "Chen_Joanna_HW4"
+author: "Joanna Chen"
+date: "10/30/2019"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir="~/Downloads/Assignment 4")
+```
+
+```{r}
+# Define the work directory to locate the data sets
+#wd<-"~/Downloads/Assignment 4"
+#setwd(wd)
+
+# Check if the data.table package is installed. If not, install it before loading.
+if (is.element("data.table", installed.packages()[,1])==FALSE){
+  install.packages("data.table")
+}
+library(data.table)
+```
+
+## Data manipulation
+```{r}
+# Read in the dataset
+demo_data <- read.csv("Demographics.csv", header = TRUE)
+makeup <- read.csv("Assessment_makeup.csv", header = TRUE)
+original <- read.csv("Assessment_original.csv", header = TRUE)
+
+# Set the datasets to datatables so we can apply data.table package later
+setDT(demo_data)
+setDT(makeup)
+setDT(original)
+
+# Join and update dataset original in place with the dataset makeup information
+finaldata = original[makeup, on=c("PATNO","SCALE"), QOL := i.QOL]
+# https://stackoverflow.com/questions/39070174/r-merge-and-update-primary-dataset
+# The second term "on" extract the row number in 'original' where 'makeup' matches, the third term update columns of 'original' with values from 'i. QOL' for those matching rows
+
+# Long to wide
+finaldata = reshape(finaldata, timevar="SCALE", idvar="PATNO", v.names="QOL", direction="wide")
+```
+
+## Calculate overall QOL scores using the ways that Author A, B, C devised
+Author A's score
+```{r}
+# Compute the average of scores 1 through 4
+finaldata$avg_first_four=rowMeans(finaldata[,c("QOL.1", "QOL.2", "QOL.3", "QOL.4")], na.rm=TRUE)
+
+# Author A's score = 70% of the average of the first four scores and 30% of the last score. Compute it, round the result to 2 decimal place and assign the result to column named A.
+finaldata[, A:= round(0.7*avg_first_four + 0.3*QOL.5,digits = 2)]
+
+# If someone misses an assessment, they get a missing value for the summary score. In other words, if any of QOL.1 - QOL.5 is NA, then the value of A (author A's score) is NA.
+finaldata[is.na(QOL.1) | is.na(QOL.2) | is.na(QOL.3) | is.na(QOL.4) | is.na(QOL.5), A := NA]
+
+# Remove the non-useful column
+finaldata[,avg_first_four:=NULL]
+```
+
+Author B's score
+```{r}
+# Count the number of the missing assessment
+finaldata$count_na = rowSums(is.na(finaldata[,c("QOL.1", "QOL.2", "QOL.3", "QOL.4", "QOL.5")]))
+
+# Compute the average of assessment 1,2,3 and 4,5
+finaldata$avg_123=rowMeans(finaldata[,c("QOL.1", "QOL.2", "QOL.3")], na.rm=TRUE)
+finaldata$avg_45=rowMeans(finaldata[,c("QOL.4", "QOL.5")], na.rm=TRUE)
+
+# Author's B score = 50% of the average of the first three scores and 50% of the last two scores. Compute it, round the result to 2 decimal place and assign the result to column named B.
+finaldata[,B:= round(0.5*avg_123 + 0.5*avg_45,digits = 2)]
+
+# Set the B score missing if there are more than 1 missing scores
+finaldata[,B:= ifelse(count_na>1,NA,B)]
+
+# Remove the non-useful columns
+finaldata[,c("avg_123","avg_45","count_na"):=NULL]
+```
+
+Author C's score
+```{r}
+#Set the key for later join
+setkey(finaldata,PATNO)
+setkey(demo_data,PATNO)
+
+#Join the demographic data and final data based on the existing keys
+finaldata = demo_data[finaldata]
+
+# Out of State situation
+# Compute the average of the completed assessments (regardless of how many are missing)
+finaldata$avg_QOL=rowMeans(finaldata[,c("QOL.1", "QOL.2", "QOL.3", "QOL.4", "QOL.5")], na.rm=TRUE)
+# If residency is out of state, the score is the half of the average QOL plus 25
+finaldata[,C:=ifelse(Residency==2, round(.5*avg_QOL + 25,digits = 2), NA)]
+
+# In state situation
+# For any assessment in QOL.1 - QOL.5, assign 50 to it if it is missing.
+names <- c("QOL.1", "QOL.2", "QOL.3", "QOL.4", "QOL.5")
+for(col in names) set(finaldata, i=which(is.na(finaldata[[col]])), j=col, value=50)
+
+# If the residency is instate, the total score is the average of all of the assessments.
+finaldata$new_avg_QOL=rowMeans(finaldata[,c("QOL.1", "QOL.2", "QOL.3", "QOL.4", "QOL.5")], na.rm=TRUE)
+finaldata[,C:=ifelse(Residency==1, round(new_avg_QOL ,digits = 2), C)]
+
+# Remove the non-useful columns
+finaldata[,c("avg_QOL","new_avg_QOL","Gender","QOL.1", "QOL.2", "QOL.3", "QOL.4", "QOL.5"):=NULL]
+```
+
+Create an indicator of which author’s score was the highest (A, B, or C)
+```{r}
+# Subset the finaldata, only leave the column Author A, B, C's score
+test = finaldata[,c("A","B","C")]
+# If there's missing value in the test, set it as zero. (Without loss of generality, if in other problem the score can be possibly zero, we can set the missing value as negative number, e.g. -1. But 0 works in this case.)
+test[is.na(test)] <- 0
+
+# Find the maximum position in matrix, then return to its column name.
+# Note that max.col() finds the maximum position for each row of a matrix, 
+finaldata$HighestQOL <- names(test)[max.col(test)]
+
+# Rename the column
+setnames(finaldata,"A", "Author_A_score")
+setnames(finaldata,"B", "Author_B_score")
+setnames(finaldata,"C", "Author_C_score")
+```
+
+Label the categorical variables
+```{r}
+finaldata$Year <- factor(finaldata$Year, levels = c(1:5), labels = c("Freshman", "Sophomore", "Junior", "Senior", "Senior Plus"))
+finaldata$Residency <- factor(finaldata$Residency, levels = c(1:2), labels = c("In State", "Out of State"))
+finaldata$Major <- factor(finaldata$Major, levels = c(1:6), labels = c("Chemistry", "Biology", "Mathematics", "Physics", "Psychology", "Other"))
+```
+
+## Deliverables
+```{r}
+# prints first 15 observations, a table with the frequency distribution of HighestQOL, a table with the frequency distribution of HighestQOL by Residency
+head(finaldata, n=15)
+table(finaldata$HighestQOL)
+table(finaldata$HighestQOL,finaldata$Residency)
+```
+
