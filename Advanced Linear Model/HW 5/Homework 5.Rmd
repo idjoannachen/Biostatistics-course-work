@@ -1,0 +1,119 @@
+---
+title: "BIS623 Homework 5"
+subtitle: "Due on 10/31/2019 before the lecture"
+author: "Joanna Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: pdf_document
+---
+
+
+## Problem 1
+
+We collected a dataset for 25 customers satisfactory score ($Y$) at different time of the day ($X$) for a restaurant. The data 
+was saved in ```poly.rdata```. Please finish the following questions.
+
+```{r}
+#Set the work directory and read in the data
+setwd("~/Downloads/HW 5")
+poly_data = read.csv("poly_data.csv", header=TRUE)
+library(ggplot2)
+library(dplyr)
+library(polynom)
+```
+  
+1. Fit polynomial models from orders 1, 3, 5, 7, and 9 using R. Plot the fitted curve over original data for each of these models. 
+
+```{r}
+polyd1=lm(Y ~ poly(X, 1, raw=TRUE), data=poly_data) 
+polyd3=lm(Y ~ poly(X, 3, raw=TRUE), data=poly_data) 
+polyd5=lm(Y ~ poly(X, 5, raw=TRUE), data=poly_data) 
+polyd7=lm(Y ~ poly(X, 7, raw=TRUE), data=poly_data)
+polyd9=lm(Y ~ poly(X, 9, raw=TRUE), data=poly_data)
+
+
+my.eq1 <- as.character(signif(as.polynomial(coef(polyd1)), 4))
+my.eq3 <- as.character(signif(as.polynomial(coef(polyd3)), 4))
+my.eq5 <- as.character(signif(as.polynomial(coef(polyd5)), 4))
+my.eq7 <- as.character(signif(as.polynomial(coef(polyd7)), 4))
+my.eq9 <- as.character(signif(as.polynomial(coef(polyd9)), 4))
+
+p = ggplot(data = poly_data, aes(x = X, y = Y)) +
+    geom_point(color = "darkgreen", size = 1)  #Plotting the scatter point
+
+p + stat_smooth(method="lm", se=TRUE, fill=NA,formula=y ~ poly(x, 1, raw=TRUE),colour="red") + 
+    annotate(geom = "text", x = 0, y = 0, label = my.eq1, family = "serif", hjust = 0, parse = TRUE, size = 4)
+
+p + stat_smooth(method="lm", se=TRUE, fill=NA,formula=y ~ poly(x, 3, raw=TRUE),colour="red") + 
+    annotate(geom = "text", x = 0, y = 0, label = my.eq3, family = "serif", hjust = 0, parse = TRUE, size = 4)
+
+p + stat_smooth(method="lm", se=TRUE, fill=NA,formula=y ~ poly(x, 5, raw=TRUE),colour="red") + 
+    annotate(geom = "text", x = 0, y = 0, label = my.eq5, family = "serif", hjust = 0, parse = TRUE, size = 4)
+
+p + stat_smooth(method="lm", se=TRUE, fill=NA,formula=y ~ poly(x, 7, raw=TRUE),colour="red") + 
+    annotate(geom = "text", x = 0, y = 0, label = my.eq7, family = "serif", hjust = 0, parse = TRUE, size = 4)
+
+p + stat_smooth(method="lm", se=TRUE, fill=NA,formula=y ~ poly(x, 9, raw=TRUE),colour="red") + 
+    annotate(geom = "text", x = 0, y = 0, label = my.eq9, family = "serif", hjust = 0, parse = TRUE, size = 4)
+```
+
+
+2. Which polynomial order will you choose eventually? State your reasons.
+\par I will choose the third order polynomial. We don't want to the model overfits the data.
+
+3. What is the "Adjusted R-squared" for the final model you choose?
+\par From the following summary statistics, we know that the adjusted R-squared is 0.7935.
+```{r}
+summary(polyd3)
+```
+
+4. Fit another polynomial model under the polynomial order you choose but using orthogonal polynomials. Does LSE change compared with those in your original model? Does Adjusted R-squared change compared that in your original model? 
+\par Comparing LSE (the Estimate Std column), it changes. In the orthogonal polynomial model, Adjusted R-squared = 0.7935. It doesn't change.
+```{r}
+polyd3_orthogonal=lm(Y ~ poly(X, 3, raw=FALSE), data=poly_data)
+summary(polyd3_orthogonal)
+
+#Mean square error
+#mean(polyd3_orthogonal$residuals^2)
+#mean(polyd3$residuals^2)
+
+```
+
+
+
+## Problem 2
+
+We want to fit a model with age, race (four categories--white, black, asian and other) and their interaction for the ```income```  example in the class. Please finish the following question.
+
+1. Please first create a reference cell coding for "race", and then write down the regression model formulation. 
+$$
+\begin{array}{l}{} \\ {x_{2}=\left\{\begin{array}{ll}{1} & {\text { if white }} \\ {0} & {\text { otherwise  }}\end{array}\right.} \\ {x_{3}=\left\{\begin{array}{ll}{1} & {\text {  if black } } \\ {0} & {\text { otherwise  }}\end{array}\right.} \\ {x_{4}=\left\{\begin{array}{ll}{1} & {\text {  if asian } } \\ {0} & {\text { otherwise  }}\end{array}\right.}
+\end{array}
+$$
+\par Let $x_1$ be the age. Then
+$$E (Y) = \beta_0 + \beta_1x_1 + \beta_2x_2 + \beta_3x_3 + \beta_4x_4 + \beta_5x_1x_2 + \beta_6x_1x_3 + \beta_7x_1x_4
+$$ \par
+
+For the case race is White, $E(Y) = \beta_0 + \beta_2 + \beta_1x_1 + \beta_5x_1$; \par
+For the case race is Black, $E(Y) = \beta_0 + \beta_3 + \beta_1x_1 + \beta_6x_1$;\par
+For the case race is Asian, $E(Y) = \beta_0 + \beta_4 + \beta_1x_1 + \beta_7x_1$. \par
+For the case race is others, $E(Y) = \beta_0 + \beta_1x_1$; \par
+
+2. Please state the null and alternative hypothesis for "Coincident". If you are going to use Wald test, what is the $R$ matrix?
+$$H_0: \beta_2 = \beta_3 = \beta_4 = \beta_5 = \beta_6 = \beta_7 = 0 $$
+$$H_a: \text{At least one of them is non-zero.} $$
+$$
+\left(\begin{array}{llllllll}{0} & {0} & {1} & {0} & {0} & {0} & {0} & {0} \\ {0} & {0} & {0} & {1} & {0} & {0} & {0} & {0} \\ {0} & {0} & {0} & {0} & {1} & {0} & {0} & {0} \\ {0} & {0} & {0} & {0} & {0} & {1} & {0} & {0} \\ {0} & {0} & {0} & {0} & {0} & {0} & {1} & {0} \\ {0} & {0} & {0} & {0} & {0} & {0} & {0} & {1}\end{array}\right)_{6 \times 8}
+$$
+
+3. Please state the null and alternative hypothesis for "Parallel". If you are going to use Wald test, what is the $R$ matrix?
+$$H_0: \beta_5 = \beta_6 = \beta_7 = 0 $$
+$$H_a: \text{At least one of them is non-zero.} $$
+$$
+\left(\begin{array}{llllllll}{0} & {0} & {0} & {0} & {0} & {1} & {0} & {0} \\ {0} & {0} & {0} & {0} & {0} & {0} & {1} & {0} \\ {0} & {0} & {0} & {0} & {0} & {0} & {0} & {1}\end{array}\right)_{3 \times 8}
+$$
+4. Please state the null and alternative hypothesis for "Equal intercept". If you are going to use Wald test, what is the $R$ matrix?
+$$H_0: \beta_2 = \beta_3 = \beta_4 = 0 $$
+$$H_a: \text{At least one of them is non-zero.} $$
+$$
+\left(\begin{array}{llllllll}{0} & {0} & {1} & {0} & {0} & {0} & {0} & {0} \\ {0} & {0} & {0} & {1} & {0} & {0} & {0} & {0} \\ {0} & {0} & {0} & {0} & {1} & {0} & {0} & {0}\end{array}\right)_{3 \times 8}
+$$

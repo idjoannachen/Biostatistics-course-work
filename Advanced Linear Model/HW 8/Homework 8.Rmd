@@ -1,0 +1,127 @@
+---
+title: "BIS623 Homework 8"
+subtitle: "Due on 11/21/2019 before the lecture"
+author: "Joanna Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+Please derive the variance-covariance matrix of $\hat{\beta}_{R}$ (the estimate of the ridge regression).
+\par We know that
+$$
+\begin{aligned} E\left(\hat{\beta}_{R}\right) 
+&=E\left(\left(X^{T} X+\lambda I_{p}\right)^{-1} X^{T} Y\right) \\ &=\left(X^{T} X+\lambda I_{p}\right)^{-1} X^{T} X \beta \end{aligned}
+$$
+
+$$
+\begin{aligned} \operatorname{Var}\left(\hat{\beta}_{R}\right) 
+&=\operatorname{Var}\left(\left(X^{T} X+\lambda I_{p}\right)^{-1} X^{T} Y\right) \\ &=\operatorname{Var}\left(\left(X^{T} X+\lambda I_{p}\right)^{-1} X^{T} X \hat{\beta}\right) \quad \text { Let us denote }\left(X^{T} X+\lambda I_{p}\right)^{-1} X^{T} X \text { ty } A \\ 
+&=A \operatorname{Var}(\hat{\beta}) A^{\top} \\ 
+&=\sigma^{2} A\left(X^{\prime} X\right)^{-1} A^{\top} \\ 
+&=\sigma^{2}\left(X^{\top} X+\lambda I_{p}\right)^{-1} X^{\top} X\left(X^{\prime} X\right)^{-1}\left[\left(X^{\top} X+\lambda  I_{p}\right)^{-1} X^{\top} X\right]^{\top} \\ &=\sigma^{2}\left(X^{\top} X+\lambda I_{p}\right)^{-1} X^{\top} X\left[\left(X^{\top} X+\lambda I_{p} \right)^{-1}\right]^{\top} \quad \text { since }\left(X^{\top} X\right)^{\top}=X^{\top} X \end{aligned}
+$$
+
+## Problem 2
+Without a consideration of intercept, assume we have a design matrix (an orthonormal design matrix)
+$$X=
+\frac{1}{2}\begin{pmatrix}
+-1 &-1\\
+-1 & 1\\
+1 &-1\\
+1 &1
+\end{pmatrix}
+$$ and an outcome $Y$.
+Please derive the ordinary least squares  estimator and ridge estimator to verify the ridge estimator scales the OLS estimator by a factor in this case.
+OLS estimate:
+
+$$
+\hat{\beta}=\left(X^{\top} X\right)^{-1} X^{\top} Y
+$$
+$$
+\begin{aligned} X^{\top} X &=\frac{1}{2}\left(\begin{array}{cccc}{-1}& {-1} & {1} & {1} \\ {-1} & {1} & {-1} &{1}\end{array}\right) \frac{1}{2}\left(\begin{array}{cc}{-1} & {-1} \\ {-1} & {1} \\ {1} & {-1} \\ {1} & {1} \end{array}\right) 
+\\ &=\frac{1}{4}\left(\begin{array}{cc}{4} & {0} \\ {0} & {4}\end{array}\right)
+\\ &=\left(\begin{array}{cc}{1} & {0} \\ {0} & {1}\end{array}\right) 
+\\ &= (X^{\top} X)^{-1}
+\end{aligned}
+$$
+
+
+
+$$
+\begin{aligned}\left(X^{\top} X\right)^{-1} X^{\top} 
+&=\left(\begin{array}{cc}{1} & {0} \\ {0} & {1}\end{array}\right) \frac{1}{2}\left(\begin{array}{cccc}{-1} & {-1} & {1} & {1}\\ {-1} & {1} & {-1} & {1} \end{array}\right) \\ &=\frac{1}{2}\left(\begin{array}{cccc}{-1} & {-1} & {1} & {1} \\ {-1} & {1} & {-1} & {1}\end{array}\right) \\ &=\left(\begin{array}{cccc}{-0.5} & {-0.5} & {0.5} & {0.5} \\ {-0.5} & {0.5} & {-0.5} & {0.5}\end{array}\right) \end{aligned}
+$$
+
+Use R to check the answer
+```{r}
+A = (1/2)*(matrix(c(-1,-1,-1,1,1,-1,1,1),nrow = 4, ncol = 2, byrow = TRUE))
+solve(t(A)%*%A)%*%t(A)
+```
+
+Therefore,
+$$
+\hat{\beta}=\left(\begin{array}{cccc}{-0.5} & {-0.5} & {0.5} & {0.5} \\ {-0.5} & {0.5} & {-0.5} & {0.5}\end{array}\right) Y
+$$
+Ridge estimator:
+$$
+\begin{aligned} \hat{\beta_{R}} &=\left(X^{\top} X+\lambda I_{p}\right)^{-1} X^{\top} Y \\ &=\left[\left(\begin{array}{ll}{1} & {0} \\ {0} & {1}\end{array}\right)+\left(\begin{array}{ll}{\lambda} & {0} \\ {0} & {\lambda}\end{array}\right)\right]^{-1} X^{\top} Y \\ 
+&=\left(\begin{array}{ccc}{1+\lambda} & {0} \\ {0} & {1+\lambda}\end{array}\right)^{-1} \frac{1}{2}\left(\begin{array}{cccc}{-1} & {-1} &{1} & {1} \\ {-1} & {1} & {-1} & {1}\end{array}\right) Y\\
+&=\left(\begin{array}{cc}\frac{1}{1+\lambda} & {0} \\ {0} & \frac{1}{1+\lambda}\end{array}\right) \left(\begin{array}{cccc}-\frac{1}{2} & -\frac{1}{2} &\frac{1}{2} & \frac{1}{2} \\ -\frac{1}{2} & \frac{1}{2} & -\frac{1}{2} & \frac{1}{2}\end{array}\right) Y\\
+&= \left(\begin{array}{cccc}-\frac{1}{2(1+\lambda)} & -\frac{1}{2(1+\lambda)} &\frac{1}{2(1+\lambda)} & \frac{1}{2(1+\lambda)} \\ -\frac{1}{2(1+\lambda)} & \frac{1}{2(1+\lambda)} & -\frac{1}{2(1+\lambda)} & \frac{1}{2(1+\lambda)}\end{array}\right) Y\\
+&=\frac{1}{1+\lambda} \left(\begin{array}{cccc}-\frac{1}{2} & -\frac{1}{2} &\frac{1}{2} & \frac{1}{2} \\ -\frac{1}{2} & \frac{1}{2} & -\frac{1}{2} & \frac{1}{2}\end{array}\right) Y\\
+&=\frac{1}{1+\lambda}\hat{\beta}
+\end{aligned}
+$$
+Therefore, Ridge estimator scales the OLS estimator by the fatocr $\frac{1}{1+\lambda}$ in this case.
+
+## Problem 3
+Please do a forward stepwise selection for the ``state`` data used in the class. Is the result consistent with the one from backward stepwise?
+
+```{r}
+data(state)
+statedata = data.frame(state.x77,row.names=state.abb)
+fit <- lm(Life.Exp~.,data = statedata) # Full model
+fit.base <- lm(Life.Exp~1,data=statedata) # Intercept-only model
+```
+I used two ways to do forward stepwise selection.
+Foe the first way, I used the step() function which automatically compared AIC.
+```{r}
+
+fit.forward <- step(fit.base,scope=list(lower=formula(fit.base),upper=formula(fit)), direction = "forward")
+summary(fit.forward)
+formula(fit.forward)
+```
+For the second way, I used R function addterm() in the MASS package which applys an F-test criterion or a P-value criterion. I start with intercept-only model and then admit the predictor with the smallest P-value until it's above my Alpha-level
+```{r}
+
+library(MASS)
+addterm( fit.base, scope = fit, test="F" )
+NewMod = update( fit.base, .~. + Murder )
+addterm( NewMod, scope = fit, test="F" )
+NewMod = update( NewMod, .~. + HS.Grad )
+addterm( NewMod, scope = fit, test="F" )
+NewMod = update( NewMod, .~. + Frost )
+addterm( NewMod, scope = fit, test="F" )
+AIC(NewMod)
+NewMod = update( NewMod, .~. + Population )
+addterm( NewMod, scope = fit, test="F" )
+AIC(NewMod) #AIC reduce, admit the Population Variable.
+formula(NewMod)
+
+```
+
+```{r}
+# Backward Elimination 
+fit.backward <- step(fit,scope=list(lower=fit.base,upper=fit), direction = "backward")
+fit.backward
+step(fit,scope=list(lower=fit.base,upper=fit), direction = "backward")
+summary(fit.backward)
+formula(fit.backward)
+```
+Comparing with backward selection, the result is consistent.

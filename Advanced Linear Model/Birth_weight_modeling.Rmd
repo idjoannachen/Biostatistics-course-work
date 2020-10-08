@@ -1,0 +1,354 @@
+---
+title: "Birth weight modeling"
+author: "Joanna Chen"
+date: "12/5/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir="~/Downloads")
+```
+
+```{r,include=FALSE}
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(glmnet)
+library(mgcv)
+library(scales)
+library(quantreg)
+library(scales)
+```
+
+Data Cleaning
+```{r,include=FALSE}
+dt = read.csv("~/Downloads/FinalProjectData.csv", header=TRUE)
+dt = setDT(dt)
+
+# Drop variables 'pnumlbw' and 'pnumsga' since they do not have any information (all values are 0)
+# Drop 'parity' because it has only 10 non-zero observations
+# Drop 'delwt' and 'ppwt' since the difference between the two is already coded in weight gain
+
+dt = dt[,c("pnumlbw","pnumsga","parity","delwt","ppwt","X"):=NULL]
+
+dt$babysex <- as.factor(dt$babysex)
+dt$frace <- as.factor(dt$frace)
+dt$malform <- as.factor(dt$malform)
+dt$mrace <- as.factor(dt$mrace)
+
+# delete menarche == 0
+dt <- dt[-which(dt$menarche==0),]
+
+# summary(dt)
+
+# Check whether the variable birth weight follow normal distribution
+ggplot(dt, aes(x = bwt)) + geom_density() +labs(title = "Histogram of birth weight",x = "bwt")
+# The distribution of birth weight is well bell-shaped, we can assume that the variable follows normal distribution.
+
+# Correlations between variables
+dt %>% 
+  select_if(is.numeric) %>%
+  select(bwt, everything()) %>% 
+  cor() %>% 
+  knitr::kable(digits = 3)
+# menarche has the least corr with bwt -0.027
+
+# check NA values
+dt %>% 
+  summarise_all(funs(sum(is.na(.)))) %>% 
+  knitr::kable()
+#check zero-equal values
+dt %>% 
+  summarise_all(funs(sum(. == 0))) %>% 
+  knitr::kable()
+```
+
+Multiple Linear Regressions
+```{r,include = FALSE}
+# multicollinearity: Use VIF to select variables untill all preditors have VIF less than 10.
+model1 = lm(bwt ~., dt)  
+car::vif(model1) 
+#https://stats.stackexchange.com/questions/70679/which-variance-inflation-factor-should-i-be-using-textgvif-or-textgvif/96584#96584
+
+mlr = lm(bwt ~.-mrace-frace, dt) 
+car::vif(mlr) 
+summary(mlr) # adjusted R-squared:  0.7051
+
+summary(lm(log(bwt) ~.-mrace-frace, dt)) #Adjusted R-squared:  0.7349
+summary(lm(log(bwt) ~.-mrace-frace-malform, dt)) #Adjusted R-squared:  0.735
+# all of the VIFs calculated for each predictor are lower than 5, indicating that the coefficients might not be misleading due to collinearity. The adjusted R2 is 0.7159, which is good for model building, and most of the predictors have significant coefficient.
+# all variables left in the model have vif less than 10, we conclude that there is no multicollinearity among them
+
+# plot of model residuals against fitted values (predicted value)
+library(modelr)
+dt %>% 
+  modelr::add_predictions(model = mlr) %>% 
+  modelr::add_residuals(model = mlr) %>%
+  ggplot(aes(x = pred, y = resid)) + 
+  geom_point(alpha = 0.5) +
+  geom_smooth(se = FALSE) +
+  labs(
+    title = "Model residuals against fitted values",
+        y = "Residual",
+        x = "Prediction value"
+    )
+```
+
+Polynomial Models
+```{r}
+summary(lm(dt$bwt ~  . - ppbmi + poly(ppbmi,2), data = dt)) 
+#frace, malform,menarche,poly(ppbmi, 2)2 are not significant, Adjusted R-squared:  0.7167  
+summary(lm(dt$bwt ~  . - ppbmi + poly(ppbmi,3), data = dt)) 
+#frace,malform,menarche,momage are not significant, Adjusted R-squared:  0.7169
+
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,2), data = dt)) #Adjusted R-squared:  0.7168
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,3), data = dt)) #Adjusted R-squared:  0.7172
+summary(lm(dt$bwt ~  . - ppbmi + poly(ppbmi,3) - wtgain + poly(wtgain,3), data = dt)) #Adjusted R-squared:  0.7175
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,3) - smoken + poly(smoken,3), data = dt)) #Adjusted R-squared:  0.7175
+summary(lm(dt$bwt ~  . - ppbmi + poly(ppbmi,2) - wtgain + poly(wtgain,3) - smoken + poly(smoken,3), data = dt)) #Adjusted R-squared:  0.7175
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,3) - menarche + poly(menarche,3), data = dt)) #Adjusted R-squared:  0.7176
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,3) - momage + poly(momage,2), data = dt)) #Adjusted R-squared:  0.7176
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,3) - gaweeks + poly(gaweeks,3), data = dt)) #Adjusted R-squared:  0.7187
+summary(lm(dt$bwt ~  . - wtgain + poly(wtgain,2)  - menarche - frace - fincome-malform-momage, data = dt)) #Adjusted R-squared:  0.7169
+
+summary(lm(dt$bwt ~  . - ppbmi + poly(ppbmi,2), data = dt)) 
+#frace, malform,menarche,poly(ppbmi, 2)2 are not significant, Adjusted R-squared:  0.7167  
+summary(lm(dt$bwt ~  . - ppbmi + poly(ppbmi,3), data = dt)) 
+#frace,malform,menarche,momage are not significant, Adjusted R-squared:  0.7169
+
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,2), data = dt)) #Adjusted R-squared:  0.7423
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,3), data = dt)) #Adjusted R-squared:  0.7424 
+summary(lm(log(bwt) ~  . - ppbmi + poly(ppbmi,3) - wtgain + poly(wtgain,3), data = dt)) #Adjusted R-squared:  0.7426
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,3) - smoken + poly(smoken,3), data = dt)) #Adjusted R-squared:  0.7426
+summary(lm(log(bwt) ~  . - ppbmi + poly(ppbmi,2) - wtgain + poly(wtgain,3) - smoken + poly(smoken,3), data = dt)) #Adjusted R-squared:  0.7426
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,2)  - menarche - frace - fincome-malform-momage, data = dt)) #Adjusted R-squared:  0.7424
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,3) - momage + poly(momage,2), data = dt)) #Adjusted R-squared:  0.7425
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,3) - menarche + poly(menarche,3), data = dt)) #Adjusted R-squared:  0.7429
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,3) - gaweeks + poly(gaweeks,3), data = dt)) #Adjusted R-squared:  0.7449
+
+summary(lm(log(bwt) ~  . - wtgain + poly(wtgain,2)  - menarche - frace - fincome-malform-momage, data = dt)) #Adjusted R-squared:  0.7424
+summary(lm(log(bwt) ~ . - wtgain + poly(wtgain, 3) - menarche + poly(menarche, 2) - ppbmi + poly(ppbmi, 3), data = dt))#Adjusted R-squared:  0.7428 
+```
+
+Stepwise Selection: choose the smallest AIC model,
+```{r,include=FALSE}
+stepwise = step(lm(bwt ~., data = dt), direction = "both") #Adjusted R-squared:  0.7169 
+summary(step(lm(log(bwt) ~., data = dt), direction = "both")) #Adjusted R-squared:  0.742
+
+summary(stepwise) %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 3)
+
+summary(stepwise) %>% 
+  broom::glance() %>% 
+  knitr::kable(digits = 3)
+
+```
+
+Interaction Model
+```{r}
+inter = lm(bwt ~ babysex * bhead +blength*bhead+ gaweeks + mheight + ppbmi + smoken + wtgain , data = dt) #Adjusted R-squared:  0.7016
+summary(lm(log(bwt) ~ babysex * bhead +blength*bhead+ gaweeks + mheight + ppbmi + smoken + wtgain , data = dt)) #Adjusted R-squared: 0.7493
+summary(lm(log(bwt) ~ babysex * bhead +blength*bhead+ babysex*blength + gaweeks + mheight + ppbmi + smoken + wtgain , data = dt)) #Adjusted R-squared: 0.7493
+summary(lm(log(bwt) ~ blength*bhead+ gaweeks + mheight + ppbmi + smoken + wtgain , data = dt)) #Adjusted R-squared: 0.748
+
+summary(inter)#Adjusted R-squared:  0.719
+summary(inter) %>% 
+  broom::tidy() %>% 
+  knitr::kable(digits = 3)
+
+summary(inter) %>% 
+  broom::glance() %>% 
+  knitr::kable(digits = 3)
+```
+
+Lasso Regression
+```{r}
+data.lasso <- dt
+data.lasso$frace2 <- ifelse(data.lasso$frace==2,1,0)
+data.lasso$frace3 <- ifelse(data.lasso$frace==3,1,0)
+data.lasso$frace4 <- ifelse(data.lasso$frace==4,1,0)
+data.lasso$frace8 <- ifelse(data.lasso$frace==8,1,0)
+
+data.lasso <- data.lasso[-which(names(data.lasso)=='frace')]
+
+data.lasso$mrace2 <- ifelse(data.lasso$mrace==2,1,0)
+data.lasso$mrace3 <- ifelse(data.lasso$mrace==3,1,0)
+data.lasso$mrace4 <- ifelse(data.lasso$mrace==4,1,0)
+
+data.lasso <- data.lasso[-which(names(data.lasso)=='mrace')]
+
+X <- data.matrix(data.lasso[,-4])
+Y <- data.matrix(data.lasso[,4])
+
+set.seed(1234)
+CV <- cv.glmnet(X,Y)
+CV$lambda.min
+
+model.lasso1 <- glmnet(X,Y,lambda=1.904802) 
+coef(model.lasso1)
+
+cv.glmnet(X, Y, alpha = 0)$lambda.min
+model.ridge1 <- glmnet(X,Y,lambda=38.67118) 
+coef(model.ridge1)
+```
+
+```{r,include=FALSE}
+set.seed(101)
+CV1 = matrix(nrow=100,ncol=10,data=rep(NA,1000))
+colnames(CV1) <- c("mlr1","mlr2","lasso1","ridge1","poly_reg1","poly_reg2","stepwise","inter","inter2","inter3")
+
+for(i in 1:100){
+  GROUP = sample(1:5, size = nrow(dt), replace = TRUE)
+  data.train = dt[which(GROUP != 1),]
+  data.test = dt[which(GROUP == 1),]
+  
+  mlr1 <- lm(bwt ~.-mrace-frace, data=data.train)
+  CV1[i,1] <- mean((data.test$bwt - predict(mlr1, newdata = data.test[,-4]))^2)
+  
+  mlr2 <- lm(bwt ~.-mrace-frace-malform, data = data.train)  
+  CV1[i,2] <- mean((data.test$bwt - predict(mlr2, newdata = data.test[,-4]))^2)
+  
+  data.lasso <- data.train
+  data.lasso$frace2 <- ifelse(data.lasso$frace==2,1,0)
+  data.lasso$frace3 <- ifelse(data.lasso$frace==3,1,0)
+  data.lasso$frace4 <- ifelse(data.lasso$frace==4,1,0)
+  data.lasso$frace8 <- ifelse(data.lasso$frace==8,1,0)
+  
+  data.lasso <- data.lasso[-which(names(data.lasso)=='frace')]
+  
+  data.lasso$mrace2 <- ifelse(data.lasso$mrace==2,1,0)
+  data.lasso$mrace3 <- ifelse(data.lasso$mrace==3,1,0)
+  data.lasso$mrace4 <- ifelse(data.lasso$mrace==4,1,0)
+  
+  data.lasso <- data.lasso[-which(names(data.lasso)=='mrace')]
+  
+  X <- data.matrix(data.lasso[,-4])
+  Y <- data.matrix(data.lasso[,4])
+  
+  data.lasso.test <- data.test
+  data.lasso.test$frace2 <- ifelse(data.lasso.test$frace==2,1,0)
+  data.lasso.test$frace3 <- ifelse(data.lasso.test$frace==3,1,0)
+  data.lasso.test$frace4 <- ifelse(data.lasso.test$frace==4,1,0)
+  data.lasso.test$frace8 <- ifelse(data.lasso.test$frace==8,1,0)
+  
+  data.lasso.test <- data.lasso.test[-which(names(data.lasso.test)=='frace')]
+  
+  data.lasso.test$mrace2 <- ifelse(data.lasso.test$mrace==2,1,0)
+  data.lasso.test$mrace3 <- ifelse(data.lasso.test$mrace==3,1,0)
+  data.lasso.test$mrace4 <- ifelse(data.lasso.test$mrace==4,1,0)
+  
+  data.lasso.test <- data.lasso.test[-which(names(data.lasso.test)=='mrace')]
+
+  X.test <- data.matrix(data.lasso.test[,-4])
+  Y.test <- data.matrix(data.lasso.test[,4])
+  
+  lasso1 <- glmnet(X,Y,lambda=1.904802)
+  CV1[i,3] <- mean((Y.test - predict(lasso1, newx = X.test))^2)
+  
+  ridge <- glmnet(X,Y,alpha=0,lambda = 38.67118)
+  CV1[i,4] <- mean((Y.test - predict(ridge, newx = X.test))^2)
+  
+  poly_reg <-  lm(bwt ~  . - wtgain + poly(wtgain,3) - gaweeks + poly(gaweeks,3), data = data.train)
+  CV1[i,5] <- mean((data.test$bwt - predict(poly_reg, newdata = data.test[,-4]))^2)
+  
+  poly_reg2 <- lm(bwt ~  . - wtgain + poly(wtgain,3) - menarche + poly(menarche,3), data = data.train)
+  CV1[i,6] <- mean((data.test$bwt - predict(poly_reg2, newdata = data.test[,-4]))^2)
+  
+  stepwise <- step(lm(bwt ~., data = data.train), direction = "both")
+  CV1[i,7] <- mean((data.test$bwt - predict(stepwise, newdata = data.test[,-4]))^2)
+  
+  inter <- lm(bwt ~ babysex * bhead +blength*bhead+ gaweeks + mheight + ppbmi + smoken + wtgain, data = data.train)
+  CV1[i,8] <- mean((data.test$bwt - predict(inter, newdata = data.test[,-4]))^2)
+  
+  inter2 <- lm(bwt ~ babysex * bhead +blength*bhead+ babysex*blength + gaweeks + mheight + ppbmi + smoken + wtgain, data = data.train)
+  CV1[i,9] <- mean((data.test$bwt - predict(inter2, newdata = data.test[,-4]))^2)
+  
+  inter3 <- lm(bwt ~ blength*bhead+ gaweeks + mheight + ppbmi + smoken + wtgain, data = data.train)
+  CV1[i,10] <- mean((data.test$bwt - predict(inter3, newdata = data.test[,-4]))^2)
+}
+```
+
+```{r}
+rmse_result=sqrt(colMeans(CV1))
+cross_validation_result = CV1  
+CV_result = CV1
+```
+
+```{r}
+knitr::kable(rmse_result)
+```
+
+Final Model + Model Diagnostic
+```{r}
+model <- lm(bwt ~  . - wtgain + poly(wtgain,3) - gaweeks + poly(gaweeks,3)-momage+log(momage), data = dt)
+summary(model) #Adjusted R-squared:  0.7187 
+# 1. leverage points
+plot(model,5)
+#The plot above highlights the top 3 most extreme points (#498, 1477, 1505).
+#Theoretically, typical rules of thumb are 2(p+1)/n or 3(p+1)/n, where n is the number of observations and p the number of predictor variables.
+HighLeverage = cooks.distance(model) > (3*(2+1)/nrow(dt))
+#We can see the #498, 1477, 2668 return true.
+
+#ii. Outlier
+#From the previous plot, we can see that #27 exceed 3 standard deviations which is considered as outlier. 
+LargeResiduals <- rstudent(model) > 3
+#We can see the #498, 1477 return true.
+
+#iii. Influential values
+#Use Cook’s distance to determine the influence of a value.
+#cook's distance
+plot(model,4)
+
+# Residuals vs Leverage
+plot(model, 5)
+
+#The top 3 most extreme values are labelled on the Cook’s distance plot. But these data don’t present any influential points because all points are well inside of the Cook’s distance lines on the Residuals vs Leverage plot.
+
+#Remove the values with high leverage and large residuals and refit the model. We can see that the updated adjusted R-squared = 0.5037. The diagnostic plot has been shown as following.
+
+dt2 <- dt[!HighLeverage & !LargeResiduals,] 
+model = lm(bwt ~  . - wtgain + poly(wtgain,3) - gaweeks + poly(gaweeks,3), data = dt2) #Adjusted R-squared:  0.7422
+
+summary(model)
+coef(model)
+
+scatter.smooth(model$fitted.values, model$residuals, pch = 19,lpars=c(col='red'))
+
+qqnorm(model$residuals, pch = 19)
+qqline(model$residuals,col='red')
+
+plot(cooks.distance(model), pch=19)
+```
+
+```{r}
+# Label the categorical variable
+dt$frace <- factor(dt$frace, levels = c(1,2,3,4,8,9), labels = c("White","Black", "Asian", "Puerto Rican", "Other","Unknown"))
+dt$marital_status <- factor(dt$marital_status, levels = c(1:6), labels = c("Married","Divorced", "Separated", "Widowed", "Single","Other"))
+dt$malform <- factor(dt$malform, levels = c(0,1), labels = c("Absent","Present"))
+dt$mrace <- factor(dt$mrace, levels = c(1,2,3,4,8), labels = c("White","Black", "Asian", "Puerto Rican", "Other"))
+
+table1 = c("**Baby's Sex**", n = "",Percent = "")
+table1 = rbind(table1, c("Male",n = dt[,.N,babysex][babysex == 1]$N ,Percent = percent(dt[,.N,babysex][babysex == 1]$N/sum(dt[,.N,babysex]$N))))
+table1 = rbind(table1, c("Female",n = dt[,.N,babysex][babysex == 2]$N ,Percent = percent(dt[,.N,babysex][babysex == 1]$N/sum(dt[,.N,babysex]$N))))
+
+table1 = rbind(table1, c("**Father's Race**", "" ,""))
+for (i in 1:nrow(dt[,.N,frace])) {
+    table1 = rbind(table1, c(as.character(dt[,.N,frace][order(-N)]$frace[i]),n = dt[,.N,frace][order(-N)]$N[i] ,Percent = percent(dt[,.N,frace][order(-N)]$N[i]/sum(dt[,.N,frace][order(-N)]$N))))
+}
+
+table1 = rbind(table1, c("**Malformations**", "" ,""))
+for (i in 1:nrow(dt[,.N,malform])) {
+    table1 = rbind(table1, c(as.character(dt[,.N,malform][order(-N)]$malform[i]),n = dt[,.N,malform][order(-N)]$N[i] ,Percent = percent(dt[,.N,malform][order(-N)]$N[i]/sum(dt[,.N,malform][order(-N)]$N))))
+}
+
+table1 = rbind(table1, c("**Mother's Race**", "" ,""))
+for (i in 1:nrow(dt[,.N,mrace])) {
+    table1 = rbind(table1, c(as.character(dt[,.N,mrace][order(-N)]$mrace[i]),n = dt[,.N,mrace][order(-N)]$N[i] ,Percent = percent(dt[,.N,mrace][order(-N)]$N[i]/sum(dt[,.N,malform][order(-N)]$N))))
+}
+
+knitr::kable(table1)
+rownames(table1)=NULL
+```
+

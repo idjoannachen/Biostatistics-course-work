@@ -1,0 +1,117 @@
+---
+title: "BIS623 Homework 7"
+subtitle: "Due on 11/14/2019 before the lecture"
+author: "Joanna Chen"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: pdf_document
+---
+  
+Please use the data ``Leinhardt`` in the R library ``carData``.
+```{r,message=F, warning=F}
+if(!require("carData")){
+  install.packages("carData")
+}
+library(carData)
+
+if(!require("data.table")){
+  install.packages("data.table")
+}
+library(data.table)
+
+if(!require("ggfortify")){
+  install.packages("ggfortify")
+}
+library(ggfortify)
+
+# Read in the data and set it as data.table
+dt = Leinhardt
+setDT(dt)
+```
+
+The dataset four variables:
+
+- income: Per-capita income in U. S. dollars
+- infant: Infant-mortality rate per 1000 live births.
+- region: A factor with levels
+- oil: Oil-exporting country; yes or no
+
+
+There are missing data in the original dataset. Please use ``na.omit`` to remove the missing data which results in 101 observation.
+
+```{r}
+dt = na.omit(dt)
+```
+
+
+### Question 1: 
+Fit a MLR to assess the impact of income and oil exporting on infant mortality. What is the adjusted $R^2$ for this model? 
+```{r}
+myfit=lm(infant ~ income + oil, data=dt)
+summary(myfit)
+```
+\par From the model, we can see that the adjusted R-squared = 0.1615 
+
+### Question 2: 
+Plot the diagnosis plots. Do you see any problem in the model fitting and how you want to modify the model? 
+```{r}
+autoplot(myfit,which=1:6,label.size = 3)
+qqnorm(rstandard(myfit), pch=23, bg='red', cex=2)
+```
+\par The residual is not normal which we can tell from the Normal QQ-plot. If the residuals were really normal, we'd expect this plot to be roughly on the diagonal. I would like to use log transformation on the data. 
+  
+### Question 3: 
+Re-fit the model based on the revised model and re-plot the diagnosis plots to make sure the model fitting issue has been solved. 
+\par I have tried taking log on the infant, income, on both, and weight variance. It turns out that taking log on the infant variable is the best. The new QQ plot is be roughly on the diagonal and that means the residual is close to normal. 
+```{r}
+dt$loginfant = log(dt$infant)
+#Re-fit the model
+myfit1=lm(loginfant ~ income + oil, data=dt)
+#plot(myfit1)
+#Re-plot the diagnosis plots
+autoplot(myfit1,which=1:6,label.size = 3)
+qqnorm(rstandard(myfit1), pch=23, bg='red', cex=2)
+```
+  
+  
+### Question 4:
+Based on the new diagnosis plots, do see you still see any leverage point/outliers/influential points? If so, remove them and re-fit the data.
+What is the adjuated $R^2$  for the current model? Give your conclusion on the impact of income and oil exporting on infact mortality.
+\par i. Leverage points
+```{r}
+plot(myfit1, 5)
+```
+\par The plot above highlights the top 3 most extreme points (#24, 25, 27).
+\par Theoretically, typical rules of thumb are 2(p+1)/n or 3(p+1)/n, where n is the number of observations and p the number of predictor variables.
+```{r}
+HighLeverage = cooks.distance(myfit1) > (3*(2+1)/nrow(dt))
+```
+\par We can see the #24,25,27 return false.
+\par
+\par ii. Outlier
+\par From the previous plot, we can see that #27 exceed 3 standard deviations which is considered as outlier.
+\par Theoretically, 
+```{r}
+LargeResiduals <- rstudent(myfit1) > 3
+```
+\par We can see the #27 returns false.
+\par
+\par iii. Influential values
+\par Use Cook’s distance to determine the influence of a value.
+```{r}
+# Cook's distance
+plot(myfit1, 4)
+# Residuals vs Leverage
+plot(myfit1, 5)
+```
+\par The top 3 most extreme values are labelled on the Cook’s distance plot. But these data don’t present any influential points because all points are well inside of the Cook’s distance lines on the Residuals vs Leverage plot.
+\par Remove the values with high leverage and large residuals and refit the model. We can see that the updated adjusted R-squared = 0.5037. The diagnostic plot has been shown as following. 
+```{r}
+dt <- dt[!HighLeverage & !LargeResiduals,]
+myfit2 = lm(loginfant ~ income + oil, data=dt)
+summary(myfit2)
+autoplot(myfit2,which=1:6,label.size = 3)
+```
+\par
+Conclusion: 
+\par Let’s first convert the categorical variable oil into a dummy variable which takes values 0 for yes and 1 for no.
+\par The infant-mortality rate is higher by exp(5.191e-02) units for oil-exporting country than for non-oil-exporting country while all other variables held constant. The expected mean change in infant-mortality rate for one unit of change in the per-capita income while holding other predictors in the model constant is exp(-4.635e-04).
